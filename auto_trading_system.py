@@ -27,7 +27,46 @@ class AutoTradingSystem:
         self.data_formatter = DataFormatter(crypto_api_key)
         self.market_analyzer = AIAnalyzer(api_key=anthropic_api_key, base_url=base_url)
         self.decision_ai = TradingDecisionAI(api_key=anthropic_api_key, base_url=base_url)
-        self.simulator = TradingSimulator(initial_balance=initial_balance)
+
+        # 创建两个模拟器：正向和反向
+        self.simulator_normal = TradingSimulator(
+            initial_balance=initial_balance,
+            persist_file="trading_state_normal.json"
+        )
+        self.simulator_reverse = TradingSimulator(
+            initial_balance=initial_balance,
+            persist_file="trading_state_reverse.json"
+        )
+
+        # 保持向后兼容
+        self.simulator = self.simulator_normal
+
+    def _reverse_decision(self, decision: dict) -> dict:
+        """
+        反转交易决策
+
+        Args:
+            decision: 原始决策字典
+
+        Returns:
+            反转后的决策字典
+        """
+        action = decision.get('action', 'hold')
+
+        # 反转映射
+        reverse_map = {
+            'buy_long': 'buy_short',
+            'buy_short': 'buy_long',
+            'sell_long': 'sell_short',
+            'sell_short': 'sell_long',
+            'hold': 'hold'
+        }
+
+        reversed_decision = decision.copy()
+        reversed_decision['action'] = reverse_map.get(action, 'hold')
+        reversed_decision['reason'] = f"[反向操作] {decision.get('reason', '')}"
+
+        return reversed_decision
 
     def run_trading_cycle(self, symbol: str):
         """
@@ -66,9 +105,18 @@ class AutoTradingSystem:
         current_price = self.data_formatter.get_current_price(symbol)
         print(f"✓ 当前价格: {current_price:.2f}")
 
-        account_info = self.simulator.get_account_info(current_price)
-        print(f"✓ 账户余额: {account_info['balance']:.2f}")
-        print(f"  总权益: {account_info['total_equity']:.2f}")
+        # 获取正向账户信息
+        account_info_normal = self.simulator_normal.get_account_info(current_price)
+        print(f"✓ [正向] 账户余额: {account_info_normal['balance']:.2f}")
+        print(f"  [正向] 总权益: {account_info_normal['total_equity']:.2f}")
+
+        # 获取反向账户信息
+        account_info_reverse = self.simulator_reverse.get_account_info(current_price)
+        print(f"✓ [反向] 账户余额: {account_info_reverse['balance']:.2f}")
+        print(f"  [反向] 总权益: {account_info_reverse['total_equity']:.2f}")
+
+        # 使用正向账户信息进行决策
+        account_info = account_info_normal
 
         # 步骤4: AI做出交易决策
         print("\n[步骤4] AI做出交易决策...")
@@ -97,32 +145,55 @@ class AutoTradingSystem:
         else:
             execution_price = current_price
 
-        trade_result = self._execute_trade(decision, symbol, execution_price)
+        # 执行正向交易
+        print("\n  [正向交易]")
+        trade_result_normal = self._execute_trade(decision, symbol, execution_price, self.simulator_normal)
 
-        if trade_result["success"]:
-            print(f"✓ 交易执行成功")
+        if trade_result_normal["success"]:
+            print(f"  ✓ 正向交易执行成功")
             if decision['action'] != 'hold':
-                print(f"  交易ID: {trade_result.get('trade_id', 'N/A')}")
-                if 'cost' in trade_result:
-                    print(f"  花费/释放保证金: {trade_result['cost']:.2f}")
-                if 'pnl' in trade_result:
-                    print(f"  实现盈亏: {trade_result['pnl']:.2f}")
-                print(f"  当前余额: {trade_result['balance']:.2f}")
+                print(f"    交易ID: {trade_result_normal.get('trade_id', 'N/A')}")
+                if 'cost' in trade_result_normal:
+                    print(f"    花费/释放保证金: {trade_result_normal['cost']:.2f}")
+                if 'pnl' in trade_result_normal:
+                    print(f"    实现盈亏: {trade_result_normal['pnl']:.2f}")
+                print(f"    当前余额: {trade_result_normal['balance']:.2f}")
         else:
-            print(f"✗ 交易执行失败: {trade_result.get('error', '未知错误')}")
+            print(f"  ✗ 正向交易执行失败: {trade_result_normal.get('error', '未知错误')}")
+
+        # 执行反向交易
+        print("\n  [反向交易]")
+        reversed_decision = self._reverse_decision(decision)
+        trade_result_reverse = self._execute_trade(reversed_decision, symbol, execution_price, self.simulator_reverse)
+
+        if trade_result_reverse["success"]:
+            print(f"  ✓ 反向交易执行成功")
+            if reversed_decision['action'] != 'hold':
+                print(f"    交易ID: {trade_result_reverse.get('trade_id', 'N/A')}")
+                if 'cost' in trade_result_reverse:
+                    print(f"    花费/释放保证金: {trade_result_reverse['cost']:.2f}")
+                if 'pnl' in trade_result_reverse:
+                    print(f"    实现盈亏: {trade_result_reverse['pnl']:.2f}")
+                print(f"    当前余额: {trade_result_reverse['balance']:.2f}")
+        else:
+            print(f"  ✗ 反向交易执行失败: {trade_result_reverse.get('error', '未知错误')}")
 
         # 步骤6: 显示最终账户状态
         print("\n[步骤6] 最终账户状态:")
-        self.simulator.print_account_info(execution_price)
+        print("\n  [正向账户]")
+        self.simulator_normal.print_account_info(execution_price)
+        print("\n  [反向账户]")
+        self.simulator_reverse.print_account_info(execution_price)
 
         return {
             "success": True,
             "analysis": analysis_result,
             "decision": decision_result,
-            "trade": trade_result
+            "trade_normal": trade_result_normal,
+            "trade_reverse": trade_result_reverse
         }
 
-    def _execute_trade(self, decision: dict, symbol: str, execution_price: float) -> dict:
+    def _execute_trade(self, decision: dict, symbol: str, execution_price: float, simulator: TradingSimulator) -> dict:
         """
         执行交易决策
 
@@ -130,6 +201,7 @@ class AutoTradingSystem:
             decision: AI决策字典
             symbol: 交易产品代码
             execution_price: 执行价格
+            simulator: 交易模拟器实例
 
         Returns:
             交易结果字典
@@ -151,13 +223,13 @@ class AutoTradingSystem:
 
         # 根据action执行相应的交易，使用execution_price
         if action == 'buy_long':
-            return self.simulator.buy_long(quantity, execution_price, leverage)
+            return simulator.buy_long(quantity, execution_price, leverage)
         elif action == 'buy_short':
-            return self.simulator.buy_short(quantity, execution_price, leverage)
+            return simulator.buy_short(quantity, execution_price, leverage)
         elif action == 'sell_long':
-            return self.simulator.sell_long(quantity, execution_price)
+            return simulator.sell_long(quantity, execution_price)
         elif action == 'sell_short':
-            return self.simulator.sell_short(quantity, execution_price)
+            return simulator.sell_short(quantity, execution_price)
         else:
             return {
                 "success": False,

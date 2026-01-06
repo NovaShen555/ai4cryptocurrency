@@ -15,8 +15,11 @@ app = Flask(__name__)
 
 # 全局变量
 trading_system = None
-trading_history = []
+trading_history_normal = []
+trading_history_reverse = []
 price_history = []
+equity_history_normal = []
+equity_history_reverse = []
 is_running = False
 
 # API密钥配置
@@ -39,17 +42,36 @@ def init_trading_system():
 
 def load_history():
     """从持久化文件加载历史数据"""
-    global trading_history, price_history
+    global trading_history_normal, trading_history_reverse, price_history, equity_history_normal, equity_history_reverse
 
-    # 加载交易历史
-    if os.path.exists("trading_state.json"):
-        with open("trading_state.json", "r", encoding="utf-8") as f:
+    # 加载正向交易历史
+    if os.path.exists("trading_state_normal.json"):
+        with open("trading_state_normal.json", "r", encoding="utf-8") as f:
             state = json.load(f)
             trades = state.get("trades", [])
 
-            trading_history = []
+            trading_history_normal = []
             for trade in trades:
-                trading_history.append({
+                trading_history_normal.append({
+                    "trade_id": trade["trade_id"],
+                    "timestamp": trade["timestamp"],
+                    "position_type": trade["position_type"],
+                    "quantity": trade["quantity"],
+                    "price": trade["price"],
+                    "leverage": trade["leverage"],
+                    "cost": trade["cost"],
+                    "is_open": trade["is_open"]
+                })
+
+    # 加载反向交易历史
+    if os.path.exists("trading_state_reverse.json"):
+        with open("trading_state_reverse.json", "r", encoding="utf-8") as f:
+            state = json.load(f)
+            trades = state.get("trades", [])
+
+            trading_history_reverse = []
+            for trade in trades:
+                trading_history_reverse.append({
                     "trade_id": trade["trade_id"],
                     "timestamp": trade["timestamp"],
                     "position_type": trade["position_type"],
@@ -65,26 +87,57 @@ def load_history():
         with open("price_history.json", "r", encoding="utf-8") as f:
             price_history = json.load(f)
 
+    # 加载正向总权益历史
+    if os.path.exists("equity_history_normal.json"):
+        with open("equity_history_normal.json", "r", encoding="utf-8") as f:
+            equity_history_normal = json.load(f)
 
-def save_price_history(price, timestamp):
-    """保存价格历史"""
-    global price_history
+    # 加载反向总权益历史
+    if os.path.exists("equity_history_reverse.json"):
+        with open("equity_history_reverse.json", "r", encoding="utf-8") as f:
+            equity_history_reverse = json.load(f)
+
+
+def save_price_history(price, equity_normal, equity_reverse, timestamp):
+    """保存价格和总权益历史"""
+    global price_history, equity_history_normal, equity_history_reverse
+
     price_history.append({
         "timestamp": timestamp,
         "price": price
     })
 
+    equity_history_normal.append({
+        "timestamp": timestamp,
+        "equity": equity_normal
+    })
+
+    equity_history_reverse.append({
+        "timestamp": timestamp,
+        "equity": equity_reverse
+    })
+
     # 只保留最近100条记录
     if len(price_history) > 100:
         price_history = price_history[-100:]
+    if len(equity_history_normal) > 100:
+        equity_history_normal = equity_history_normal[-100:]
+    if len(equity_history_reverse) > 100:
+        equity_history_reverse = equity_history_reverse[-100:]
 
     with open("price_history.json", "w", encoding="utf-8") as f:
         json.dump(price_history, f, ensure_ascii=False, indent=2)
 
+    with open("equity_history_normal.json", "w", encoding="utf-8") as f:
+        json.dump(equity_history_normal, f, ensure_ascii=False, indent=2)
+
+    with open("equity_history_reverse.json", "w", encoding="utf-8") as f:
+        json.dump(equity_history_reverse, f, ensure_ascii=False, indent=2)
+
 
 def trading_task():
     """定时交易任务"""
-    global is_running, trading_history
+    global is_running
 
     while is_running:
         try:
@@ -99,14 +152,21 @@ def trading_task():
                 # 重新加载历史数据
                 load_history()
 
-                # 保存当前价格
-                if "trade" in result and result["trade"].get("success"):
-                    trade_info = result["trade"]
-                    if "price" in trade_info:
-                        save_price_history(
-                            trade_info["price"],
-                            datetime.now().isoformat()
-                        )
+                # 获取当前价格和两个账户的总权益
+                try:
+                    current_price = trading_system.data_formatter.get_current_price("ETHUSDT")
+                    account_info_normal = trading_system.simulator_normal.get_account_info(current_price)
+                    account_info_reverse = trading_system.simulator_reverse.get_account_info(current_price)
+
+                    # 保存价格和两个账户的总权益历史
+                    save_price_history(
+                        current_price,
+                        account_info_normal['total_equity'],
+                        account_info_reverse['total_equity'],
+                        datetime.now().isoformat()
+                    )
+                except Exception as e:
+                    print(f"✗ 保存历史数据失败: {str(e)}")
 
                 print(f"✓ 交易周期完成")
             else:
@@ -141,12 +201,14 @@ def get_account():
     try:
         # 获取当前价格
         current_price = trading_system.data_formatter.get_current_price("ETHUSDT")
-        account_info = trading_system.simulator.get_account_info(current_price)
+        account_info_normal = trading_system.simulator_normal.get_account_info(current_price)
+        account_info_reverse = trading_system.simulator_reverse.get_account_info(current_price)
 
         return jsonify({
             "success": True,
             "current_price": current_price,
-            "account": account_info
+            "account_normal": account_info_normal,
+            "account_reverse": account_info_reverse
         })
     except Exception as e:
         return jsonify({
@@ -160,7 +222,8 @@ def get_history():
     """获取交易历史"""
     return jsonify({
         "success": True,
-        "trades": trading_history
+        "trades_normal": trading_history_normal,
+        "trades_reverse": trading_history_reverse
     })
 
 
@@ -170,6 +233,16 @@ def get_price_history():
     return jsonify({
         "success": True,
         "prices": price_history
+    })
+
+
+@app.route('/api/equity_history')
+def get_equity_history():
+    """获取总权益历史"""
+    return jsonify({
+        "success": True,
+        "equities_normal": equity_history_normal,
+        "equities_reverse": equity_history_reverse
     })
 
 
