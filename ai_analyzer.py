@@ -74,8 +74,11 @@ class AIAnalyzer:
                 ]
             )
 
-            # 提取响应内容
-            response_text = message.content[0].text
+            # 提取响应内容（过滤掉thinking blocks，只获取text blocks）
+            text_blocks = [block for block in message.content if hasattr(block, 'text')]
+            if not text_blocks:
+                raise ValueError("API响应中没有找到文本内容")
+            response_text = text_blocks[0].text
 
             return {
                 "success": True,
