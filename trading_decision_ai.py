@@ -183,19 +183,27 @@ class TradingDecisionAI:
         Returns:
             解析后的决策字典
         """
-        # 尝试提取JSON（可能包含在代码块中）
         text = response_text.strip()
 
-        # 移除可能的markdown代码块标记
-        if text.startswith("```json"):
-            text = text[7:]
-        elif text.startswith("```"):
-            text = text[3:]
-
-        if text.endswith("```"):
-            text = text[:-3]
-
-        text = text.strip()
+        # 尝试从markdown代码块中提取JSON
+        if "```json" in text:
+            # 找到```json和```之间的内容
+            start = text.find("```json") + 7
+            end = text.find("```", start)
+            if end != -1:
+                text = text[start:end].strip()
+        elif "```" in text:
+            # 找到```和```之间的内容
+            start = text.find("```") + 3
+            end = text.find("```", start)
+            if end != -1:
+                text = text[start:end].strip()
+        else:
+            # 尝试找到JSON对象的开始和结束
+            start = text.find("{")
+            end = text.rfind("}")
+            if start != -1 and end != -1 and end > start:
+                text = text[start:end+1]
 
         # 解析JSON
         try:
