@@ -745,6 +745,91 @@
                     alert('停止失败');
                 });
         }
+
+        // 更新AI响应
+        function updateAIResponses() {
+            fetch('/api/ai_responses')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success && data.responses && data.responses.timestamp) {
+                        const responses = data.responses;
+                        const timestamp = new Date(responses.timestamp).toLocaleString('zh-CN');
+
+                        let html = `<div class="timestamp">更新时间: ${timestamp}</div>`;
+
+                        // 市场分析AI
+                        if (responses.analysis) {
+                            html += `
+                                <div class="ai-section">
+                                    <h3>📊 市场分析AI</h3>
+                                    <div class="ai-content">${responses.analysis.analysis_text}</div>
+                                    <div class="ai-meta">
+                                        <div class="ai-meta-item">
+                                            <span class="ai-meta-label">决策:</span>
+                                            <span>${responses.analysis.decision || 'N/A'}</span>
+                                        </div>
+                                        <div class="ai-meta-item">
+                                            <span class="ai-meta-label">输入Token:</span>
+                                            <span>${responses.analysis.usage.input_tokens}</span>
+                                        </div>
+                                        <div class="ai-meta-item">
+                                            <span class="ai-meta-label">输出Token:</span>
+                                            <span>${responses.analysis.usage.output_tokens}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            `;
+                        }
+
+                        // 交易决策AI
+                        if (responses.decision) {
+                            const params = responses.decision.params;
+                            let paramsText = '';
+                            if (params && Object.keys(params).length > 0) {
+                                paramsText = `数量: ${params.quantity || 'N/A'}, 价格: ${params.price || 'N/A'}, 杠杆: ${params.leverage || 'N/A'}x`;
+                            } else {
+                                paramsText = '无参数（观望）';
+                            }
+
+                            html += `
+                                <div class="ai-section">
+                                    <h3>🎯 交易决策AI</h3>
+                                    <div class="ai-content">${responses.decision.raw_response}</div>
+                                    <div class="ai-meta">
+                                        <div class="ai-meta-item">
+                                            <span class="ai-meta-label">操作:</span>
+                                            <span>${responses.decision.action}</span>
+                                        </div>
+                                        <div class="ai-meta-item">
+                                            <span class="ai-meta-label">参数:</span>
+                                            <span>${paramsText}</span>
+                                        </div>
+                                        <div class="ai-meta-item">
+                                            <span class="ai-meta-label">理由:</span>
+                                            <span>${responses.decision.reason}</span>
+                                        </div>
+                                    </div>
+                                    <div class="ai-meta">
+                                        <div class="ai-meta-item">
+                                            <span class="ai-meta-label">输入Token:</span>
+                                            <span>${responses.decision.usage.input_tokens}</span>
+                                        </div>
+                                        <div class="ai-meta-item">
+                                            <span class="ai-meta-label">输出Token:</span>
+                                            <span>${responses.decision.usage.output_tokens}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            `;
+                        }
+
+                        document.getElementById('aiResponsesContent').innerHTML = html;
+                    } else {
+                        document.getElementById('aiResponsesContent').innerHTML = '<div class="loading">暂无数据</div>';
+                    }
+                })
+                .catch(error => console.error('Error:', error));
+        }
     </script>
 </body>
 </html>

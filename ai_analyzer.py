@@ -65,11 +65,10 @@ class AIAnalyzer:
             message = self.client.messages.create(
                 model=model,
                 max_tokens=2000,
-                system=self.system_prompt,
                 messages=[
                     {
                         "role": "user",
-                        "content": user_message
+                        "content": self.system_prompt + "\n\n" + user_message
                     }
                 ]
             )
