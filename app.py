@@ -21,9 +21,14 @@ price_history = []
 equity_history_normal = []
 equity_history_reverse = []
 is_running = False
+latest_ai_responses = {
+    "analysis": None,
+    "decision": None,
+    "timestamp": None
+}
 
 # API密钥配置
-crypto_api_key = "517c9f7626bd460b8b48e8faa15711d2-infoway"
+crypto_api_key = "f2c603977976434f898e0eae3ebf3159-infoway"
 anthropic_api_key = "sk-k0nw6VGbaCgz9QRFASNPNwopueAzZmw2CDDOExLAQpTCaucj"
 base_url = "https://new.motchat.com/"
 
@@ -137,7 +142,7 @@ def save_price_history(price, equity_normal, equity_reverse, timestamp):
 
 def trading_task():
     """定时交易任务"""
-    global is_running
+    global is_running, latest_ai_responses
 
     while is_running:
         try:
@@ -149,6 +154,23 @@ def trading_task():
             result = trading_system.run_trading_cycle("ETHUSDT")
 
             if result["success"]:
+                # 保存最新的AI响应
+                latest_ai_responses = {
+                    "analysis": {
+                        "decision": result["analysis"]["decision"],
+                        "analysis_text": result["analysis"]["analysis"],
+                        "usage": result["analysis"]["usage"]
+                    },
+                    "decision": {
+                        "action": result["decision"]["decision"]["action"],
+                        "reason": result["decision"]["decision"]["reason"],
+                        "params": result["decision"]["decision"].get("params", {}),
+                        "raw_response": result["decision"]["raw_response"],
+                        "usage": result["decision"]["usage"]
+                    },
+                    "timestamp": datetime.now().isoformat()
+                }
+
                 # 重新加载历史数据
                 load_history()
 
@@ -270,6 +292,15 @@ def stop_trading():
         return jsonify({"success": True, "message": "定时交易已停止"})
     else:
         return jsonify({"success": False, "message": "定时交易未在运行"})
+
+
+@app.route('/api/ai_responses')
+def get_ai_responses():
+    """获取最新的AI分析和决策响应"""
+    return jsonify({
+        "success": True,
+        "responses": latest_ai_responses
+    })
 
 
 if __name__ == '__main__':

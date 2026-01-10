@@ -7,7 +7,7 @@ from auto_trading_system import AutoTradingSystem
 import time
 
 # API密钥配置
-crypto_api_key = "517c9f7626bd460b8b48e8faa15711d2-infoway"
+crypto_api_key = "f2c603977976434f898e0eae3ebf3159-infoway"
 anthropic_api_key = "sk-k0nw6VGbaCgz9QRFASNPNwopueAzZmw2CDDOExLAQpTCaucj"
 base_url = "https://new.motchat.com/"
 
