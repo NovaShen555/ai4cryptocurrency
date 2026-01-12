@@ -75,6 +75,9 @@ class CryptoDataClient:
             requests.RequestException: 请求失败时抛出
         """
         url = f"{self.BASE_URL}{endpoint}"
+        # 设置默认超时时间为10秒
+        if 'timeout' not in kwargs:
+            kwargs['timeout'] = 10
         response = self.session.request(method, url, **kwargs)
         response.raise_for_status()
 

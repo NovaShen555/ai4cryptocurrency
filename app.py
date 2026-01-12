@@ -26,11 +26,27 @@ latest_ai_responses = {
     "decision": None,
     "timestamp": None
 }
+system_logs = []  # 存储系统日志，最多300条
 
 # API密钥配置
 crypto_api_key = "f2c603977976434f898e0eae3ebf3159-infoway"
 anthropic_api_key = "sk-k0nw6VGbaCgz9QRFASNPNwopueAzZmw2CDDOExLAQpTCaucj"
 base_url = "https://new.motchat.com/"
+
+
+def add_log(message: str):
+    """添加日志到系统日志列表"""
+    global system_logs
+    timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    log_entry = f"[{timestamp}] {message}"
+    system_logs.append(log_entry)
+
+    # 只保留最新的300条日志
+    if len(system_logs) > 300:
+        system_logs = system_logs[-300:]
+
+    # 同时打印到控制台
+    print(message)
 
 
 def init_trading_system():
@@ -40,7 +56,8 @@ def init_trading_system():
         crypto_api_key=crypto_api_key,
         anthropic_api_key=anthropic_api_key,
         initial_balance=10000.0,
-        base_url=base_url
+        base_url=base_url,
+        log_callback=add_log  # 传递日志回调函数
     )
     load_history()
 
@@ -146,9 +163,9 @@ def trading_task():
 
     while is_running:
         try:
-            print(f"\n{'='*80}")
-            print(f"执行定时交易任务 - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-            print(f"{'='*80}")
+            add_log(f"\n{'='*80}")
+            add_log(f"执行定时交易任务 - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+            add_log(f"{'='*80}")
 
             # 执行交易周期
             result = trading_system.run_trading_cycle("ETHUSDT")
@@ -188,17 +205,17 @@ def trading_task():
                         datetime.now().isoformat()
                     )
                 except Exception as e:
-                    print(f"✗ 保存历史数据失败: {str(e)}")
+                    add_log(f"✗ 保存历史数据失败: {str(e)}")
 
-                print(f"✓ 交易周期完成")
+                add_log(f"✓ 交易周期完成")
             else:
-                print(f"✗ 交易周期失败: {result.get('error', '未知错误')}")
+                add_log(f"✗ 交易周期失败: {result.get('error', '未知错误')}")
 
         except Exception as e:
-            print(f"✗ 交易任务出错: {str(e)}")
+            add_log(f"✗ 交易任务出错: {str(e)}")
 
         # 等待10分钟
-        print(f"\n等待10分钟后执行下一次交易...")
+        add_log(f"\n等待10分钟后执行下一次交易...")
         time.sleep(600)  # 600秒 = 10分钟
 
 
@@ -300,6 +317,15 @@ def get_ai_responses():
     return jsonify({
         "success": True,
         "responses": latest_ai_responses
+    })
+
+
+@app.route('/api/logs')
+def get_logs():
+    """获取系统日志"""
+    return jsonify({
+        "success": True,
+        "logs": system_logs
     })
 
 

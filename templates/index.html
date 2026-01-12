@@ -330,6 +330,13 @@
                 <div class="loading">暂无数据</div>
             </div>
         </div>
+
+        <div class="ai-responses">
+            <h2>📋 系统日志 (最近300条)</h2>
+            <div id="systemLogs" style="background: #1e1e1e; color: #d4d4d4; padding: 15px; border-radius: 8px; font-family: 'Courier New', monospace; font-size: 13px; max-height: 500px; overflow-y: auto; line-height: 1.5;">
+                <div class="loading" style="color: #999;">暂无日志</div>
+            </div>
+        </div>
     </div>
 
     <script>
@@ -343,6 +350,7 @@
             updatePriceHistory();
             updateTrades();
             updateAIResponses();
+            updateLogs();
 
             // 每60秒更新一次数据
             updateInterval = setInterval(() => {
@@ -351,6 +359,7 @@
                 updatePriceHistory();
                 updateTrades();
                 updateAIResponses();
+                updateLogs();
             }, 60000);
         });
 
@@ -826,6 +835,48 @@
                         document.getElementById('aiResponsesContent').innerHTML = html;
                     } else {
                         document.getElementById('aiResponsesContent').innerHTML = '<div class="loading">暂无数据</div>';
+                    }
+                })
+                .catch(error => console.error('Error:', error));
+        }
+
+        // 更新系统日志
+        function updateLogs() {
+            fetch('/api/logs')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success && data.logs && data.logs.length > 0) {
+                        const logsContainer = document.getElementById('systemLogs');
+                        const logsHtml = data.logs.map(log => {
+                            // 对特殊字符进行HTML转义
+                            const escapedLog = log
+                                .replace(/&/g, '&amp;')
+                                .replace(/</g, '&lt;')
+                                .replace(/>/g, '&gt;')
+                                .replace(/"/g, '&quot;')
+                                .replace(/'/g, '&#039;');
+
+                            // 根据日志内容添加颜色
+                            let color = '#d4d4d4';
+                            if (escapedLog.includes('✓')) {
+                                color = '#4ade80'; // 绿色表示成功
+                            } else if (escapedLog.includes('✗')) {
+                                color = '#f87171'; // 红色表示错误
+                            } else if (escapedLog.includes('===')) {
+                                color = '#60a5fa'; // 蓝色表示分隔线
+                            } else if (escapedLog.includes('[步骤')) {
+                                color = '#fbbf24'; // 黄色表示步骤
+                            }
+
+                            return `<div style="color: ${color};">${escapedLog}</div>`;
+                        }).join('');
+
+                        logsContainer.innerHTML = logsHtml;
+
+                        // 自动滚动到底部显示最新日志
+                        logsContainer.scrollTop = logsContainer.scrollHeight;
+                    } else {
+                        document.getElementById('systemLogs').innerHTML = '<div class="loading" style="color: #999;">暂无日志</div>';
                     }
                 })
                 .catch(error => console.error('Error:', error));
