@@ -29,7 +29,7 @@ latest_ai_responses = {
 system_logs = []  # 存储系统日志，最多300条
 
 # API密钥配置
-crypto_api_key = "f2c603977976434f898e0eae3ebf3159-infoway"
+crypto_api_key = "151eb73352514d528b955d8117e9cda3-infoway"
 anthropic_api_key = "sk-k0nw6VGbaCgz9QRFASNPNwopueAzZmw2CDDOExLAQpTCaucj"
 base_url = "https://new.motchat.com/"
 
